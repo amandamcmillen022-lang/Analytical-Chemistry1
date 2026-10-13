@@ -1,0 +1,211 @@
+# This calculator IS SPECIFIC TO MY CALIBRATION CURVE, SPECIFIC TO MY DATA 
+# (See other files for calib. curve info
+# Input initial and final buret readings and KHP mass (standard, pure cpd)
+# Output: moles KHP, moles NaOH, corrections, Molarity NaOH
+# All calculations should print in a way that it is easy to follow
+# Corrections were done using an interpolation technique (similar to C.O.M problems)
+
+
+
+import numpy as np
+
+# =================================================
+# NAOH STANDARDIZATION USING KHP
+# =================================================
+
+KHP_MOLAR_MASS = 204.22  # g/mol
+
+# -------------------------------------------------
+# Buret calibration data: two passes
+# -------------------------------------------------
+
+pass1_x = np.array([10.00, 20.00, 30.10, 40.00, 49.90])
+pass1_y = np.array([-0.0293, 0.0390, -0.0180, 0.0187, 0.0085])
+
+pass2_x = np.array([10.10, 20.00, 30.20, 40.20, 49.90])
+pass2_y = np.array([-0.0042, 0.0714, -0.0050, 0.0329, -0.0277])
+
+# -------------------------------------------------
+# Average the two calibration passes
+# -------------------------------------------------
+
+average_x = (pass1_x + pass2_x) / 2
+average_y = (pass1_y + pass2_y) / 2
+
+# Assume cumulative correction is zero at zero reading.
+cal_x = np.concatenate(([0.0], average_x))
+cal_y = np.concatenate(([0.0], average_y))
+
+
+def get_correction(reading):
+    """Calculate the cumulative correction by linear interpolation."""
+    if reading < 0 or reading > average_x.max():
+        raise ValueError(
+            f"Reading must be between 0.00 and "
+            f"{average_x.max():.2f} mL."
+        )
+
+    i = np.searchsorted(cal_x, reading, side="right") - 1
+    i = min(i, len(cal_x) - 2)
+
+    x1, x2 = cal_x[i], cal_x[i + 1]
+    y1, y2 = cal_y[i], cal_y[i + 1]
+
+    fraction = (reading - x1) / (x2 - x1)
+    correction = y1 + fraction * (y2 - y1)
+
+    print(f"\n  Calibration points used:")
+    print(f"    ({x1:.4f}, {y1:+.4f})")
+    print(f"    ({x2:.4f}, {y2:+.4f})")
+    print("\n  Linear interpolation:")
+    print("    C = C1 + [(x - x1)/(x2 - x1)] * (C2 - C1)")
+    print(
+        f"    C = ({y1:+.4f}) + "
+        f"[({reading:.4f} - {x1:.4f}) / "
+        f"({x2:.4f} - {x1:.4f})] * "
+        f"[({y2:+.4f}) - ({y1:+.4f})]"
+    )
+    print(f"    C = {correction:+.6f} mL")
+
+    corrected_reading = reading + correction
+    print(
+        f"    Corrected reading = {reading:.4f} "
+        f"+ ({correction:+.6f})"
+    )
+    print(f"                     = {corrected_reading:.6f} mL")
+
+    return correction, corrected_reading
+
+
+# -------------------------------------------------
+# Main calculator
+# -------------------------------------------------
+
+print("=" * 60)
+print("           NaOH STANDARDIZATION CALCULATOR")
+print("                  KHP PRIMARY STANDARD")
+print("=" * 60)
+
+print("\nEnter q at the mass prompt to quit.")
+
+while True:
+    mass_input = input("\nMass of KHP (g): ").strip()
+
+    if mass_input.lower() == "q":
+        print("Calculator closed.")
+        break
+
+    try:
+        mass_khp = float(mass_input)
+        initial = float(input("Initial buret reading (mL): "))
+        final = float(input("Final buret reading (mL): "))
+
+        if mass_khp <= 0:
+            print("Mass must be greater than zero.")
+            continue
+
+        if not (0 <= initial <= average_x.max()
+                and 0 <= final <= average_x.max()):
+            print(
+                f"Both readings must be between 0.00 and "
+                f"{average_x.max():.2f} mL."
+            )
+            continue
+
+        if final <= initial:
+            print("Final reading must exceed initial reading.")
+            continue
+
+    except ValueError as error:
+        print(f"Invalid input: {error}")
+        continue
+
+    print("\n" + "=" * 60)
+    print("STEP 1: CORRECT THE INITIAL BURET READING")
+    print("=" * 60)
+
+    try:
+        initial_correction, corrected_initial = get_correction(initial)
+
+        print("\n" + "=" * 60)
+        print("STEP 2: CORRECT THE FINAL BURET READING")
+        print("=" * 60)
+
+        final_correction, corrected_final = get_correction(final)
+
+    except ValueError as error:
+        print(error)
+        continue
+
+    print("\n" + "=" * 60)
+    print("STEP 3: CALCULATE CORRECTED NaOH VOLUME")
+    print("=" * 60)
+
+    volume_naoh = corrected_final - corrected_initial
+
+    print("Formula:")
+    print("  Delivered volume = corrected final - corrected initial")
+    print("\nSubstitute:")
+    print(
+        f"  V = {corrected_final:.6f} - "
+        f"{corrected_initial:.6f}"
+    )
+    print(f"  V = {volume_naoh:.6f} mL")
+    print(f"  V = {volume_naoh / 1000:.8f} L")
+
+    print("\n" + "=" * 60)
+    print("STEP 4: CALCULATE MOLES OF KHP")
+    print("=" * 60)
+
+    moles_khp = mass_khp / KHP_MOLAR_MASS
+
+    print("Formula:")
+    print("  Moles KHP = mass KHP / molar mass KHP")
+    print("\nSubstitute:")
+    print(
+        f"  n(KHP) = {mass_khp:.6f} g "
+        f"/ {KHP_MOLAR_MASS:.2f} g/mol"
+    )
+    print(f"  n(KHP) = {moles_khp:.8f} mol")
+
+    print("\n" + "=" * 60)
+    print("STEP 5: CALCULATE MOLES OF NaOH")
+    print("=" * 60)
+
+    print("Balanced reaction stoichiometry: KHP : NaOH = 1 : 1")
+    print("Formula:")
+    print("  Moles NaOH = moles KHP * (1 mol NaOH / 1 mol KHP)")
+    print("\nSubstitute:")
+    print(f"  n(NaOH) = {moles_khp:.8f} * (1 / 1)")
+    moles_naoh = moles_khp
+    print(f"  n(NaOH) = {moles_naoh:.8f} mol")
+
+    print("\n" + "=" * 60)
+    print("STEP 6: CALCULATE NaOH MOLARITY")
+    print("=" * 60)
+
+    volume_liters = volume_naoh / 1000
+    molarity = moles_naoh / volume_liters
+
+    print("Formula:")
+    print("  Molarity = moles NaOH / volume NaOH in liters")
+    print("\nSubstitute:")
+    print(
+        f"  M = {moles_naoh:.8f} mol "
+        f"/ {volume_liters:.8f} L"
+    )
+    print(f"  M = {molarity:.8f} mol/L")
+
+    print("\n" + "=" * 60)
+    print("                 FINAL RESULTS")
+    print("=" * 60)
+    print(f"Mass KHP:                  {mass_khp:.4f} g")
+    print(f"Initial correction:        {initial_correction:+.6f} mL")
+    print(f"Final correction:          {final_correction:+.6f} mL")
+    print(f"Corrected initial reading: {corrected_initial:.6f} mL")
+    print(f"Corrected final reading:   {corrected_final:.6f} mL")
+    print(f"Corrected NaOH volume:     {volume_naoh:.6f} mL")
+    print(f"Moles KHP:                 {moles_khp:.8f} mol")
+    print(f"Moles NaOH:                {moles_naoh:.8f} mol")
+    print(f"NaOH molarity:             {molarity:.6f} M")
+    print("=" * 60)
